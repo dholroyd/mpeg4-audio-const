@@ -50,7 +50,7 @@ pub enum AudioObjectTypeError {
 /// assert_eq!(Err(AudioObjectTypeError::EscapeValue), AudioObjectType::try_from(31));
 /// assert_eq!(Err(AudioObjectTypeError::TooLarge(97)), AudioObjectType::try_from(97));
 /// ```
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 pub struct AudioObjectType(u8);
 
 /// This value, `31`, is not used as an _audio object type_, but is instead used in the encoding of
