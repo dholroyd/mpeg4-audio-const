@@ -41,7 +41,7 @@ pub enum AudioObjectTypeError {
 ///
 /// but disallows values that can't legitimately be represented because they are too large
 /// (the maximum representable a-o-t value is `96`) and also disallows the 'escape value' (value
-/// `31` see [`AOT_ESCAPE_VALUE`](constant.ESCAPE_VALUE.html)) which is used as part of the
+/// `31` see [`AOT_ESCAPE_VALUE`](constant.AOT_ESCAPE_VALUE.html)) which is used as part of the
 /// encoding scheme for the a-o-t field rather than as a distinct field value.
 ///
 /// ```rust
