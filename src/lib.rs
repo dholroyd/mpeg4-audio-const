@@ -216,6 +216,12 @@ impl SamplingFrequencyIndex {
     }
 }
 
+impl From<SamplingFrequencyIndex> for u8 {
+    fn from(v: SamplingFrequencyIndex) -> Self {
+        v.0
+    }
+}
+
 /// A channel configuration as defined in ISO 14496-3.
 ///
 /// In ADTS headers the `channel_configuration` field is 3 bits, covering only
@@ -252,6 +258,12 @@ impl ChannelConfiguration {
     pub const fn new(value: u8) -> Self {
         assert!(value <= 0xf, "ChannelConfiguration: expected a 4 bit value");
         Self(value)
+    }
+}
+
+impl From<ChannelConfiguration> for u8 {
+    fn from(v: ChannelConfiguration) -> Self {
+        v.0
     }
 }
 
