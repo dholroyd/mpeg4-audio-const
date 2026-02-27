@@ -9,6 +9,9 @@ description = "Definitions of types and constants for values defined by ISO/IEC 
 license = "MIT/Apache-2.0"
 keywords = [ "iso-14496-3", "mpeg4" ]
 
+# happens to be the MSRV at time of writing.  updates will be considered
+rust-version = "1.78.0"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
