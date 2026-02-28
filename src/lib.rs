@@ -20,6 +20,23 @@ pub enum AudioObjectTypeError {
     TooLarge(u8),
 }
 
+/// Represents an error converting a `u8` into a `SamplingFrequencyIndex`
+#[derive(PartialEq, Debug)]
+pub enum SamplingFrequencyIndexError {
+    /// Tried to convert the escape value `0xf`, which signals an explicit 24-bit frequency in the
+    /// bitstream rather than an index.
+    EscapeValue,
+    /// Only 4-bit values (0x0–0xe) are valid sampling frequency indices.
+    TooLarge(u8),
+}
+
+/// Represents an error converting a `u8` into a `ChannelConfiguration`
+#[derive(PartialEq, Debug)]
+pub struct ChannelConfigurationError(
+    /// The invalid value that was provided. Only 4-bit values (0x0–0xf) are valid.
+    pub u8,
+);
+
 /// Represents an
 /// [audio object type](https://en.wikipedia.org/wiki/MPEG-4_Part_3#MPEG-4_Audio_Object_Types)
 /// indicator value.
@@ -42,7 +59,7 @@ pub enum AudioObjectTypeError {
 /// ```
 ///
 /// but disallows values that can't legitimately be represented because they are too large
-/// (the maximum representable a-o-t value is `96`) and also disallows the 'escape value' (value
+/// (the maximum representable a-o-t value is `95`) and also disallows the 'escape value' (value
 /// `31` see [`AOT_ESCAPE_VALUE`](constant.AOT_ESCAPE_VALUE.html)) which is used as part of the
 /// encoding scheme for the a-o-t field rather than as a distinct field value.
 ///
@@ -59,6 +76,21 @@ pub struct AudioObjectType(u8);
 /// any _audio object type_ value greater than or equal to `32`.
 pub const AOT_ESCAPE_VALUE: u8 = 0b_11111;
 
+impl AudioObjectType {
+    /// 5-bit escape (31) + 6-bit extension (0–63) → max representable value is 95.
+    const MAX: u8 = 95;
+
+    /// Creates an `AudioObjectType` from a `u8`.
+    ///
+    /// Panics if `value` is `31` (the escape value) or greater than `95`.
+    /// In const context, an invalid value produces a compile-time error.
+    pub const fn new(value: u8) -> Self {
+        assert!(value != AOT_ESCAPE_VALUE, "AudioObjectType: 31 is the escape value, not an audio object type");
+        assert!(value <= Self::MAX, "AudioObjectType: value must be 0..=95");
+        Self(value)
+    }
+}
+
 impl From<AudioObjectType> for u8 {
     fn from(v: AudioObjectType) -> Self {
         v.0
@@ -70,8 +102,8 @@ impl TryFrom<u8> for AudioObjectType {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             AOT_ESCAPE_VALUE => Err(AudioObjectTypeError::EscapeValue),
-            96..=255 => Err(AudioObjectTypeError::TooLarge(value)),
-            _ => Ok(AudioObjectType(value)),
+            0..=Self::MAX => Ok(AudioObjectType(value)),
+            _ => Err(AudioObjectTypeError::TooLarge(value)),
         }
     }
 }
@@ -150,17 +182,20 @@ implement_aot! {
 
 /// A 4-bit sampling frequency index as defined in ISO 14496-3.
 ///
-/// Indices 0x0–0xb map to the 12 standard sampling rates (96 kHz down to
-/// 8 kHz). Indices 0xc–0xe are reserved. Index 0xf is excluded from this
+/// Indices 0x0–0xc map to the 13 standard sampling rates (96 kHz down to
+/// 7.35 kHz). Indices 0xd–0xe are reserved. Index 0xf is excluded from this
 /// type as it signals that an explicit 24-bit frequency value follows in the
 /// bitstream instead.
 ///
 /// Use [`freq`](Self::freq) to look up the sampling rate in Hz, which returns
 /// `None` for reserved indices.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct SamplingFrequencyIndex(u8);
 
 impl SamplingFrequencyIndex {
+    /// The largest valid 4-bit index (0xe). Index 0xf is the escape value.
+    const MAX: u8 = 0xe;
+
     /// 96 kHz (index 0x0).
     pub const FREQ_96000: Self = Self(0x0);
     /// 88.2 kHz (index 0x1).
@@ -185,13 +220,15 @@ impl SamplingFrequencyIndex {
     pub const FREQ_11025: Self = Self(0xa);
     /// 8 kHz (index 0xb).
     pub const FREQ_8000: Self = Self(0xb);
+    /// 7.35 kHz (index 0xc).
+    pub const FREQ_7350: Self = Self(0xc);
 
     /// Creates a `SamplingFrequencyIndex` from a 4-bit value.
     ///
     /// Panics if `value` is `0xf` (the escape value) or greater than `0xe`.
     /// In const context, an invalid value produces a compile-time error.
     pub const fn new(value: u8) -> Self {
-        assert!(value <= 0xe, "SamplingFrequencyIndex: 0xf is the escape value, not a frequency index");
+        assert!(value <= Self::MAX, "SamplingFrequencyIndex: value must be 0x0..=0xe");
         Self(value)
     }
 
@@ -211,7 +248,29 @@ impl SamplingFrequencyIndex {
             0x9 => Some(12000),
             0xa => Some(11025),
             0xb => Some(8000),
+            0xc => Some(7350),
             _ => None,
+        }
+    }
+}
+
+impl fmt::Debug for SamplingFrequencyIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            0x0 => write!(f, "FREQ_96000(0)"),
+            0x1 => write!(f, "FREQ_88200(1)"),
+            0x2 => write!(f, "FREQ_64000(2)"),
+            0x3 => write!(f, "FREQ_48000(3)"),
+            0x4 => write!(f, "FREQ_44100(4)"),
+            0x5 => write!(f, "FREQ_32000(5)"),
+            0x6 => write!(f, "FREQ_24000(6)"),
+            0x7 => write!(f, "FREQ_22050(7)"),
+            0x8 => write!(f, "FREQ_16000(8)"),
+            0x9 => write!(f, "FREQ_12000(9)"),
+            0xa => write!(f, "FREQ_11025(10)"),
+            0xb => write!(f, "FREQ_8000(11)"),
+            0xc => write!(f, "FREQ_7350(12)"),
+            _ => write!(f, "RESERVED({})", self.0),
         }
     }
 }
@@ -219,6 +278,17 @@ impl SamplingFrequencyIndex {
 impl From<SamplingFrequencyIndex> for u8 {
     fn from(v: SamplingFrequencyIndex) -> Self {
         v.0
+    }
+}
+impl TryFrom<u8> for SamplingFrequencyIndex {
+    type Error = SamplingFrequencyIndexError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0..=Self::MAX => Ok(SamplingFrequencyIndex(value)),
+            0xf => Err(SamplingFrequencyIndexError::EscapeValue),
+            _ => Err(SamplingFrequencyIndexError::TooLarge(value)),
+        }
     }
 }
 
@@ -230,10 +300,13 @@ impl From<SamplingFrequencyIndex> for u8 {
 ///
 /// This crate provides constants for the original 8 configurations (0–7);
 /// callers can define additional constants for the extended layouts as needed.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct ChannelConfiguration(u8);
 
 impl ChannelConfiguration {
+    /// The largest valid 4-bit value (0xf).
+    const MAX: u8 = 0xf;
+
     /// Channel configuration defined by the audio object type specific config.
     pub const OBJECT_TYPE_SPECIFIC_CONFIG: Self = Self(0x0);
     /// Mono (1 channel).
@@ -256,14 +329,40 @@ impl ChannelConfiguration {
     /// Panics if `value` is greater than `0xf`.
     /// In const context, an invalid value produces a compile-time error.
     pub const fn new(value: u8) -> Self {
-        assert!(value <= 0xf, "ChannelConfiguration: expected a 4 bit value");
+        assert!(value <= Self::MAX, "ChannelConfiguration: expected a 4 bit value");
         Self(value)
+    }
+}
+
+impl fmt::Debug for ChannelConfiguration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            0 => write!(f, "OBJECT_TYPE_SPECIFIC_CONFIG(0)"),
+            1 => write!(f, "MONO(1)"),
+            2 => write!(f, "STEREO(2)"),
+            3 => write!(f, "THREE(3)"),
+            4 => write!(f, "FOUR(4)"),
+            5 => write!(f, "FIVE(5)"),
+            6 => write!(f, "FIVE_ONE(6)"),
+            7 => write!(f, "SEVEN_ONE(7)"),
+            _ => write!(f, "RESERVED({})", self.0),
+        }
     }
 }
 
 impl From<ChannelConfiguration> for u8 {
     fn from(v: ChannelConfiguration) -> Self {
         v.0
+    }
+}
+impl TryFrom<u8> for ChannelConfiguration {
+    type Error = ChannelConfigurationError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0..=Self::MAX => Ok(ChannelConfiguration(value)),
+            _ => Err(ChannelConfigurationError(value)),
+        }
     }
 }
 
@@ -308,11 +407,11 @@ mod tests {
         assert_eq!(SamplingFrequencyIndex::FREQ_12000.freq(), Some(12000));
         assert_eq!(SamplingFrequencyIndex::FREQ_11025.freq(), Some(11025));
         assert_eq!(SamplingFrequencyIndex::FREQ_8000.freq(), Some(8000));
+        assert_eq!(SamplingFrequencyIndex::FREQ_7350.freq(), Some(7350));
     }
 
     #[test]
     fn sampling_frequency_reserved_indices() {
-        assert_eq!(SamplingFrequencyIndex::new(0xc).freq(), None);
         assert_eq!(SamplingFrequencyIndex::new(0xd).freq(), None);
         assert_eq!(SamplingFrequencyIndex::new(0xe).freq(), None);
     }
@@ -352,5 +451,53 @@ mod tests {
     #[should_panic]
     fn channel_configuration_too_large() {
         ChannelConfiguration::new(0x10);
+    }
+
+    #[test]
+    fn sampling_frequency_try_from_valid() {
+        assert_eq!(
+            SamplingFrequencyIndex::try_from(0x3),
+            Ok(SamplingFrequencyIndex::FREQ_48000),
+        );
+        assert_eq!(
+            u8::from(SamplingFrequencyIndex::try_from(0x3).unwrap()),
+            0x3,
+        );
+    }
+
+    #[test]
+    fn sampling_frequency_try_from_escape() {
+        assert_eq!(
+            SamplingFrequencyIndex::try_from(0xf),
+            Err(SamplingFrequencyIndexError::EscapeValue),
+        );
+    }
+
+    #[test]
+    fn sampling_frequency_try_from_too_large() {
+        assert_eq!(
+            SamplingFrequencyIndex::try_from(0x10),
+            Err(SamplingFrequencyIndexError::TooLarge(0x10)),
+        );
+    }
+
+    #[test]
+    fn channel_configuration_try_from_valid() {
+        assert_eq!(
+            ChannelConfiguration::try_from(2),
+            Ok(ChannelConfiguration::STEREO),
+        );
+        assert_eq!(
+            ChannelConfiguration::try_from(0xf),
+            Ok(ChannelConfiguration::new(0xf)),
+        );
+    }
+
+    #[test]
+    fn channel_configuration_try_from_too_large() {
+        assert_eq!(
+            ChannelConfiguration::try_from(0x10),
+            Err(ChannelConfigurationError(0x10)),
+        );
     }
 }
