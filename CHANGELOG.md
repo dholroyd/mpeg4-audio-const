@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-02-28
+
 ### Added
 - `AudioObjectType::LAYER2` (Object Type ID 33, "Layer-2"), which was missing.
 - `SamplingFrequencyIndex` type with constants for the 12 standard sampling
